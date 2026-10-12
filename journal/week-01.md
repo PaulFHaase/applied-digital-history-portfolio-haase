@@ -6,7 +6,7 @@
 
 Why are you taking Applied Digital History?
 
-I'm taking this course mainly because I hate (and love) databases, and I am interested in seeing how I can do more with collected data. I already attended the lecture about Dig. Hist. the previous semester, and would like to apply some of the concepts, and most importantly, tools that where showcased there myself, as I believe that that makes for a better learning experience.
+I'm taking this course mainly because I hate (and love) databases, and I am interested in seeing how I can do more with collected data. I already attended the lecture about Dig. Hist. the previous semester, and would like to apply some of the concepts and most importantly tools that were showcased there myself, as I believe that that makes for a better learning experience.
 
 ## 2 What I Would Like to Learn
 
