@@ -79,7 +79,7 @@ If it were not for the matching filenames, I would not be so sure at all. It cou
 
 ## Part 14, Step 3
 
-OpenRefine allows for expor of the op hist via a button and saves it as a .json with one click, no need to paste it.
+OpenRefine allows for export of the op hist via a button and saves it as a .json with one click, no need to paste it.
 
 ## Part 17. Reflection
 
@@ -88,6 +88,8 @@ I inferred that people were the same if the spelling matched except for diacriti
 If places are normalized w/o preserving the original spelling, linguists will be mad. Linguistics is a branch of history, or at least depends on it very much. Normalization, for me, changes the interpretation only if you aks questions about naming practices or ethnicities etc., so about the words that have been normalized themselves. Else, the question will probably be largely unaffected. Normalizing "subject" however may lose some distinguishability between terms that are similar, but not the same. A count of normalized place names may differ (for this dataset) because non-english names are spelt in different languages/spellings - not counting the outlier NYC.
 If date_raw were replaced by only a single year, we would lose ranges and uncertainty and also exact dates that are sometimes recorded.
 Proof requires a visual match. Metadata does not equal the content of a picture, or the physicality thereof. Metadata alone generally allows for *conjecture*, but not *proof*.
+
+General difficulties arose with GREL syntax. I got stuck quite long at removing my annoyance about "n.d." being labelled "exact".
 
 # Challenges  
 
