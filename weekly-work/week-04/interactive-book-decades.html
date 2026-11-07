@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- This policy forbids ALL network traffic from this page (no uploads, no
+     external scripts or fonts). It only allows the inline style and script below. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>Recorded editions by decade</title>
+<style>
+  /* ---------- Colours and fonts (light and dark) ---------- */
+  :root {
+    --bg: #f4f6f8; --panel: #ffffff; --text: #1c2630; --muted: #52606d;
+    --line: #d5dbe1; --bar: #2b5d8c; --bar-hover: #173d63; --missing: #6b7580;
+    --error-bg: #fdecea; --error-text: #8a1c14; --focus: #b45309;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12171c; --panel: #1b222a; --text: #e8edf1; --muted: #a4b0bb;
+      --line: #36424d; --bar: #6fa8dc; --bar-hover: #a9cdee; --missing: #98a4af;
+      --error-bg: #3a1714; --error-text: #ffb4ab; --focus: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 var(--sans); }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1, h2 { font-family: var(--serif); font-weight: 700; line-height: 1.2; }
+  h1 { font-size: 1.9rem; margin: 0 0 8px; }
+  h2 { font-size: 1.25rem; margin: 0 0 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 6px; padding: 20px; margin-top: 20px; }
+  .note { color: var(--muted); max-width: 70ch; }
+  .scope { border-left: 4px solid var(--bar); padding-left: 12px; max-width: 70ch; }
+
+  /* ---------- File picker ---------- */
+  label.picker { display: block; font-weight: 600; margin-bottom: 8px; }
+  input[type=file] { font: inherit; max-width: 100%; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  /* ---------- Messages ---------- */
+  #error { background: var(--error-bg); color: var(--error-text);
+           border: 1px solid var(--error-text); border-radius: 6px;
+           padding: 12px 16px; margin-top: 16px; }
+  #error strong { display: block; margin-bottom: 4px; }
+
+  /* ---------- Chart ---------- */
+  .chart-wrap { overflow-x: auto; padding-bottom: 4px; }
+  svg { display: block; max-width: none; height: auto; }
+  svg text { fill: var(--text); font-family: var(--sans); font-size: 13px; }
+  svg .axis-title { font-size: 14px; font-weight: 600; }
+  svg .tick { fill: var(--muted); }
+  svg .grid { stroke: var(--line); stroke-width: 1; }
+  svg .baseline { stroke: var(--text); stroke-width: 1.5; }
+  .bar { cursor: pointer; outline: none; }
+  .bar rect.fill { fill: var(--bar); }
+  .bar.is-missing rect.fill { fill: url(#hatch); stroke: var(--missing); stroke-width: 1.5; }
+  .bar:hover rect.fill, .bar:focus rect.fill { fill: var(--bar-hover); }
+  .bar.is-missing:hover rect.fill, .bar.is-missing:focus rect.fill { fill: url(#hatch); }
+  .bar:focus rect.ring { stroke: var(--focus); stroke-width: 3; }
+  .bar rect.ring { fill: none; stroke: none; }
+  #readout { min-height: 1.6em; margin: 8px 0 0; font-weight: 600; }
+
+  /* ---------- Table ---------- */
+  table { border-collapse: collapse; width: 100%; max-width: 560px; }
+  caption { text-align: left; color: var(--muted); padding-bottom: 8px; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tfoot th, tfoot td { border-top: 2px solid var(--text); border-bottom: 0; font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Recorded editions by decade</h1>
+  <p class="scope">Each bar counts <strong>recorded editions in a teaching sample</strong>
+    (rows in <code>book-sample.csv</code>). It does not measure how many books were
+    printed, how many copies existed, or who read them.</p>
+
+  <section class="panel" aria-labelledby="load-heading">
+    <h2 id="load-heading">1. Choose your file</h2>
+    <label class="picker" for="file">Select a local copy of book-sample.csv</label>
+    <input id="file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+    <p class="note">The file is read inside your browser. It is not uploaded anywhere,
+      and this page cannot make network requests.</p>
+    <noscript><p>This page needs JavaScript to read the file.</p></noscript>
+    <div id="error" role="alert" hidden></div>
+    <p id="status" role="status" class="note"></p>
+  </section>
+
+  <div id="results" hidden>
+    <section class="panel" aria-labelledby="chart-heading">
+      <h2 id="chart-heading">2. Chart</h2>
+      <p class="note" id="chart-intro"></p>
+      <div class="chart-wrap" id="chart"></div>
+      <p id="readout">Hover over a bar, or focus one and use the arrow keys, to see its details.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="table-heading">
+      <h2 id="table-heading">3. Table of counts</h2>
+      <div id="table"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const MISSING_LABEL = "Missing";   // label of the bar for empty decade cells
+
+/* ================================================================
+   1. READING THE CSV
+   ================================================================ */
+
+// Guess the separator (comma, tab or semicolon) from the first line,
+// ignoring separators inside "quoted text".
+function detectDelimiter(text) {
+  const counts = { ",": 0, "\t": 0, ";": 0 };
+  let inQuotes = false;
+  for (const c of text) {
+    if (c === '"') inQuotes = !inQuotes;
+    else if (!inQuotes) {
+      if (c === "\n" || c === "\r") break;
+      if (c in counts) counts[c]++;
+    }
+  }
+  let best = ",", most = 0;
+  for (const d in counts) if (counts[d] > most) { best = d; most = counts[d]; }
+  return best;
+}
+
+// A small CSV parser: handles quoted values, doubled quotes ("") and line
+// breaks inside quotes. Returns [{cells: [...], line: number}, ...].
+function parseDelimited(text, delim) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  let line = 1, rowLine = 1, quoteLine = 0;
+  const endRow = () => {
+    row.push(field); field = "";
+    rows.push({ cells: row, line: rowLine });
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else { if (c === "\n") line++; field += c; }
+    } else if (c === '"' && field === "") { inQuotes = true; quoteLine = line; }
+    else if (c === delim) { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endRow(); line++; rowLine = line;
+    } else field += c;
+  }
+  if (inQuotes) {
+    throw new Error("The quotation mark opened on line " + quoteLine +
+      " is never closed. Check that every quoted value ends with a closing quotation mark.");
+  }
+  if (field !== "" || row.length > 0) endRow();
+  // Ignore completely blank lines.
+  return rows.filter((r) => !(r.cells.length === 1 && r.cells[0].trim() === ""));
+}
+
+/* ================================================================
+   2. COUNTING RECORDS BY DECADE
+   ================================================================ */
+
+function analyse(text) {
+  text = text.replace(/^\uFEFF/, "");            // remove a byte-order mark
+  if (text.trim() === "") throw new Error("The file is empty.");
+
+  const delim = detectDelimiter(text);
+  const rows = parseDelimited(text, delim);
+  const header = rows[0].cells.map((h) => h.trim());
+
+  const col = header.findIndex((h) => h.toLowerCase() === "decade");
+  if (col < 0) {
+    throw new Error('No column named "decade" was found. Columns found: ' +
+      header.map((h) => '"' + h + '"').join(", ") +
+      ". Check that the first line of the file holds the column names and that you chose the right file.");
+  }
+  const data = rows.slice(1);
+  if (data.length === 0) throw new Error("The file has a header line but no data rows.");
+
+  for (const r of data) {
+    if (r.cells.length !== header.length) {
+      throw new Error("Line " + r.line + " has " + r.cells.length + " values, but the header has " +
+        header.length + " columns. The file may be damaged or use a different separator.");
+    }
+  }
+
+  // Count each decade label. Only truly empty cells count as missing.
+  const counts = new Map();
+  let missing = 0;
+  for (const r of data) {
+    const value = r.cells[col].trim();
+    if (value === "") missing++;
+    else counts.set(value, (counts.get(value) || 0) + 1);
+  }
+
+  // If all labels look like "1530s", add decades with no records (count 0)
+  // so a gap in the sample is visible as a gap.
+  const labels = [...counts.keys()];
+  if (labels.length > 0 && labels.every((l) => /^\d{4}s$/.test(l))) {
+    const years = labels.map((l) => parseInt(l.slice(0, 4), 10));
+    for (let y = Math.min(...years); y <= Math.max(...years); y += 10) {
+      if (!counts.has(y + "s")) counts.set(y + "s", 0);
+    }
+  }
+
+  // Chronological order: by the four-digit start year, not alphabetically.
+  // Labels without a year go after the dated ones.
+  const startYear = (l) => { const m = /^\d{4}/.exec(l); return m ? parseInt(m[0], 10) : null; };
+  const ordered = [...counts.keys()].sort((a, b) => {
+    const ya = startYear(a), yb = startYear(b);
+    if (ya !== null && yb !== null) return ya - yb || a.localeCompare(b);
+    if (ya !== null) return -1;
+    if (yb !== null) return 1;
+    return a.localeCompare(b);
+  });
+
+  const result = ordered.map((l) => ({ label: l, count: counts.get(l), isMissing: false }));
+  if (missing > 0) result.push({ label: MISSING_LABEL, count: missing, isMissing: true });
+
+  // Safety check: the bars must add up to the number of rows read.
+  const total = result.reduce((sum, d) => sum + d.count, 0);
+  if (total !== data.length) throw new Error("Internal check failed: counts do not add up to the number of rows.");
+
+  const delimName = delim === "\t" ? "tab" : delim === ";" ? "semicolon" : "comma";
+  return { result, total, delimName };
+}
+
+/* ================================================================
+   3. DRAWING THE CHART (plain SVG, no library)
+   ================================================================ */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// Choose a tidy step (1, 2, 5, 10, 20, 50 ...) so the axis has about 5 gridlines.
+function niceStep(max) {
+  const rough = Math.max(max, 1) / 5;
+  const p = Math.pow(10, Math.floor(Math.log10(rough)));
+  const f = rough / p;
+  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return Math.max(1, nice * p);
+}
+
+function describe(d, total) {
+  const pct = (d.count / total * 100).toFixed(1);
+  return d.label + ": " + d.count + " recorded edition" + (d.count === 1 ? "" : "s") +
+         " (" + pct + "% of " + total + " rows)";
+}
+
+function drawChart(result, total) {
+  const m = { top: 28, right: 16, bottom: 64, left: 64 };
+  const plotH = 300;
+  const longest = Math.max(...result.map((d) => d.label.length));
+  const slot = Math.max(56, longest * 8 + 12);          // width reserved per bar
+  const plotW = slot * result.length;
+  const W = m.left + plotW + m.right, H = m.top + plotH + m.bottom;
+
+  const step = niceStep(Math.max(...result.map((d) => d.count)));
+  const yMax = Math.max(step, Math.ceil(Math.max(...result.map((d) => d.count)) / step) * step);
+  const y = (v) => m.top + plotH - (v / yMax) * plotH;   // the axis starts at 0
+
+  const svg = svgEl("svg", { width: W, height: H, viewBox: "0 0 " + W + " " + H,
+    role: "group", "aria-labelledby": "svg-title svg-desc" });
+  svg.appendChild(svgEl("title", { id: "svg-title" }, "Recorded editions by decade"));
+  svg.appendChild(svgEl("desc", { id: "svg-desc" },
+    "Bar chart. Each bar counts recorded editions in a teaching sample for one decade. " +
+    "The vertical axis starts at zero. The same numbers are in the table below the chart."));
+
+  // Hatched pattern for the "Missing" bar (so it is not distinguished by colour alone).
+  const defs = svgEl("defs", {});
+  const pat = svgEl("pattern", { id: "hatch", width: 8, height: 8,
+    patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+  pat.appendChild(svgEl("rect", { width: 8, height: 8, fill: "var(--panel)" }));
+  pat.appendChild(svgEl("rect", { width: 3, height: 8, fill: "var(--missing)" }));
+  defs.appendChild(pat); svg.appendChild(defs);
+
+  // Gridlines and numbers on the vertical axis.
+  for (let v = 0; v <= yMax; v += step) {
+    svg.appendChild(svgEl("line", { x1: m.left, x2: m.left + plotW, y1: y(v), y2: y(v),
+      class: v === 0 ? "baseline" : "grid" }));
+    svg.appendChild(svgEl("text", { x: m.left - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" }, String(v)));
+  }
+
+  // Axis titles.
+  svg.appendChild(svgEl("text", { x: m.left + plotW / 2, y: H - 10, "text-anchor": "middle",
+    class: "axis-title" }, "Decade"));
+  svg.appendChild(svgEl("text", { x: 16, y: m.top + plotH / 2, "text-anchor": "middle",
+    class: "axis-title", transform: "rotate(-90 16 " + (m.top + plotH / 2) + ")" }, "Number of editions"));
+
+  // One focusable group per bar: rectangle, count label, decade label.
+  const groups = [];
+  const barW = slot * 0.7;
+  result.forEach((d, i) => {
+    const x = m.left + i * slot + (slot - barW) / 2;
+    const h = (d.count / yMax) * plotH;
+    const g = svgEl("g", { class: "bar" + (d.isMissing ? " is-missing" : ""), tabindex: 0,
+      role: "img", "aria-label": describe(d, total) });
+    g.appendChild(svgEl("rect", { class: "fill", x, y: y(d.count), width: barW, height: h }));
+    g.appendChild(svgEl("rect", { class: "ring", x: x - 2, y: y(d.count) - 2, width: barW + 4, height: h + 4 }));
+    g.appendChild(svgEl("text", { x: x + barW / 2, y: y(d.count) - 6, "text-anchor": "middle" }, String(d.count)));
+    g.appendChild(svgEl("text", { x: x + barW / 2, y: y(0) + 20, "text-anchor": "middle" }, d.label));
+    // Show details on hover or focus; arrow keys move between bars.
+    const show = () => { $("readout").textContent = describe(d, total); };
+    g.addEventListener("mouseenter", show);
+    g.addEventListener("focus", show);
+    g.addEventListener("keydown", (e) => {
+      let target = null;
+      if (e.key === "ArrowRight") target = groups[Math.min(i + 1, groups.length - 1)];
+      else if (e.key === "ArrowLeft") target = groups[Math.max(i - 1, 0)];
+      else if (e.key === "Home") target = groups[0];
+      else if (e.key === "End") target = groups[groups.length - 1];
+      if (target) { e.preventDefault(); target.focus(); }
+    });
+    groups.push(g); svg.appendChild(g);
+  });
+
+  $("chart").replaceChildren(svg);
+}
+
+/* ================================================================
+   4. THE TABLE
+   ================================================================ */
+
+function drawTable(result, total) {
+  const table = document.createElement("table");
+  const cap = document.createElement("caption");
+  cap.textContent = "Recorded editions per decade in the teaching sample (one row per decade).";
+  table.appendChild(cap);
+
+  const head = table.createTHead().insertRow();
+  [["Decade", false], ["Recorded editions", true], ["Share of rows", true]].forEach(([t, num]) => {
+    const th = document.createElement("th");
+    th.scope = "col"; th.textContent = t; if (num) th.className = "num";
+    head.appendChild(th);
+  });
+
+  const body = table.createTBody();
+  result.forEach((d) => {
+    const tr = body.insertRow();
+    const th = document.createElement("th");
+    th.scope = "row"; th.textContent = d.label; tr.appendChild(th);
+    [String(d.count), (d.count / total * 100).toFixed(1) + "%"].forEach((t) => {
+      const td = tr.insertCell(); td.className = "num"; td.textContent = t;
+    });
+  });
+
+  const foot = table.createTFoot().insertRow();
+  const th = document.createElement("th"); th.scope = "row"; th.textContent = "Total"; foot.appendChild(th);
+  [String(total), "100.0%"].forEach((t) => { const td = foot.insertCell(); td.className = "num"; td.textContent = t; });
+
+  $("table").replaceChildren(table);
+}
+
+/* ================================================================
+   5. WIRING IT TOGETHER
+   ================================================================ */
+
+function showError(message) {
+  const box = $("error");
+  box.replaceChildren();
+  const strong = document.createElement("strong");
+  strong.textContent = "This file could not be used";
+  box.append(strong, message);
+  box.hidden = false;
+  $("results").hidden = true;
+  $("status").textContent = "";
+}
+
+$("file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  $("error").hidden = true;
+  if (!file) return;
+  $("status").textContent = "Reading " + file.name + " ...";
+  try {
+    const text = await file.text();            // read locally; nothing is sent anywhere
+    const { result, total, delimName } = analyse(text);
+    $("chart-intro").textContent = "Each bar counts recorded editions (rows) in the teaching sample, " +
+      "grouped by the decade column. It does not show total book production or readership.";
+    drawChart(result, total);
+    drawTable(result, total);
+    $("readout").textContent = "Hover over a bar, or focus one and use the arrow keys, to see its details.";
+    $("results").hidden = false;
+    $("status").textContent = "Read " + total + " rows from " + file.name +
+      " (separator detected: " + delimName + "). The bar counts add up to " + total + ".";
+  } catch (err) {
+    showError(err.message || "Unknown problem while reading the file.");
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- This policy blocks ALL network traffic (no uploads, no external scripts,
+     fonts or images). Only the inline style and script below may run. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;">
+<title>Photograph records: search and filter</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --panel: #ffffff; --text: #1c2630; --muted: #52606d;
+    --line: #d5dbe1; --accent: #2b5d8c; --head: #e6ecf2; --focus: #b45309;
+    --error-bg: #fdecea; --error-text: #8a1c14; --warn-bg: #fff4d6; --warn-text: #5c4300;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12171c; --panel: #1b222a; --text: #e8edf1; --muted: #a4b0bb;
+      --line: #36424d; --accent: #6fa8dc; --head: #26313b; --focus: #fbbf24;
+      --error-bg: #3a1714; --error-text: #ffb4ab; --warn-bg: #3b2f0e; --warn-text: #ffe29a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--sans); }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font: 700 1.8rem/1.2 var(--serif); margin: 0 0 8px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: 16px; margin-top: 16px; }
+  .note { color: var(--muted); margin: 6px 0 0; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  label { font-weight: 600; display: block; margin-bottom: 4px; }
+  input, select, button { font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--muted); border-radius: 4px; padding: 6px 10px; min-height: 40px; }
+  button { cursor: pointer; }
+  .controls { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); align-items: end; }
+  .controls .wide { grid-column: 1 / -1; }
+  .controls input[type=search], .controls select { width: 100%; }
+  .sort-row { display: flex; gap: 8px; }
+  .sort-row select { flex: 1; }
+  .msg { border-radius: 6px; padding: 10px 14px; margin-top: 12px; }
+  #error { background: var(--error-bg); color: var(--error-text); border: 1px solid var(--error-text); }
+  #warn { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-text); }
+  #count { font-weight: 700; margin: 0 0 8px; }
+
+  /* ---------- Table (wide screens): scrolls sideways inside its own box ---------- */
+  .table-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left;
+           vertical-align: top; min-width: 9rem; max-width: 26rem; overflow-wrap: anywhere; }
+  thead th { position: sticky; top: 0; background: var(--head); padding: 0; z-index: 1; }
+  thead th button { width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent;
+                    font-weight: 700; padding: 8px 10px; }
+  thead th button:hover { background: var(--line); }
+  tbody th { font-weight: 600; background: var(--panel); }
+  tbody tr:nth-child(even) td, tbody tr:nth-child(even) th { background: color-mix(in srgb, var(--head) 40%, var(--panel)); }
+  .arrow { color: var(--accent); margin-left: 4px; }
+  .none { padding: 16px; color: var(--muted); }
+
+  /* ---------- Narrow screens: each record becomes a stacked card ---------- */
+  @media (max-width: 760px) {
+    .table-wrap { max-height: none; overflow: visible; border: 0; }
+    table, tbody, tr, th, td { display: block; width: 100%; max-width: none; }
+    thead { position: absolute; left: -9999px; }          /* sorting uses the "Sort by" menu instead */
+    tbody tr { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 12px;
+               background: var(--panel); padding: 4px 0; }
+    tbody tr:nth-child(even) td, tbody tr:nth-child(even) th { background: transparent; }
+    td, th { border: 0; padding: 4px 12px; min-width: 0; }
+    td:empty { display: none; }                          /* hide blank fields on cards (data is unchanged) */
+    td::before, tbody th::before { content: attr(data-label); display: block;
+      font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Photograph records: search and filter</h1>
+  <p class="note">Designed for <code>historic_photographs_sample_dataset.csv</code>. The file is read
+    inside your browser and is never uploaded; this page cannot make network requests.
+    Cell text is shown exactly as it appears in the file.</p>
+
+  <section class="panel" aria-labelledby="load-h">
+    <label id="load-h" for="file">Select a local CSV file</label>
+    <input id="file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain">
+    <noscript><p>This page needs JavaScript to read the file.</p></noscript>
+    <div id="error" class="msg" role="alert" hidden></div>
+    <div id="warn" class="msg" hidden></div>
+  </section>
+
+  <section class="panel" id="viewer" aria-label="Records" hidden>
+    <div class="controls">
+      <div class="wide">
+        <label for="search">Search all fields (every word you type must appear somewhere in the row)</label>
+        <input id="search" type="search" autocomplete="off">
+      </div>
+      <div id="filters" class="wide controls" style="padding:0"></div>
+      <div>
+        <label for="sortBy">Sort by</label>
+        <div class="sort-row">
+          <select id="sortBy"></select>
+          <button id="sortDir" type="button">Ascending</button>
+        </div>
+      </div>
+      <div><button id="reset" type="button">Reset search and filters</button></div>
+    </div>
+    <p id="count" role="status" aria-live="polite" style="margin-top:16px"></p>
+    <div class="table-wrap" id="wrap" tabindex="0" role="region" aria-label="Records table (scrollable)">
+      <table id="table"></table>
+    </div>
+    <p id="more" class="note"></p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+// Columns this page was designed for, and the two used for dropdown filters.
+const EXPECTED = ["record_id","title_raw","creator_raw","date_raw","place_raw","country_raw",
+  "subject_raw","object_type_raw","caption_language_raw","holding_institution_raw","rights_raw",
+  "box_folder_raw","filename_raw","notes_raw","creator_authority_uri","place_wikidata_qid","lcsh_subjects"];
+const FILTER_COLUMNS = ["country_raw", "object_type_raw"];
+const MAX_ROWS_SHOWN = 1000;      // drawing thousands of rows would make the page slow
+
+/* ================================================================
+   1. READING THE CSV (same approach as a spreadsheet would use)
+   ================================================================ */
+
+// Guess comma, tab or semicolon from the first line, ignoring quoted text.
+function detectDelimiter(text) {
+  const counts = { ",": 0, "\t": 0, ";": 0 };
+  let inQuotes = false;
+  for (const c of text) {
+    if (c === '"') inQuotes = !inQuotes;
+    else if (!inQuotes) {
+      if (c === "\n" || c === "\r") break;
+      if (c in counts) counts[c]++;
+    }
+  }
+  let best = ",", most = 0;
+  for (const d in counts) if (counts[d] > most) { best = d; most = counts[d]; }
+  return best;
+}
+
+// Small CSV parser: quoted commas, doubled quotes ("") and line breaks inside quotes.
+function parseDelimited(text, delim) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false, line = 1, rowLine = 1, quoteLine = 0;
+  const endRow = () => { row.push(field); field = ""; rows.push({ cells: row, line: rowLine }); row = []; };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else { if (c === "\n") line++; field += c; }
+    } else if (c === '"' && field === "") { inQuotes = true; quoteLine = line; }
+    else if (c === delim) { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endRow(); line++; rowLine = line;
+    } else field += c;
+  }
+  if (inQuotes) throw new Error("The quotation mark opened on line " + quoteLine +
+    " is never closed. Check that every quoted value ends with a closing quotation mark.");
+  if (field !== "" || row.length > 0) endRow();
+  return rows.filter((r) => !(r.cells.length === 1 && r.cells[0].trim() === ""));
+}
+
+/* ================================================================
+   2. STATE
+   ================================================================ */
+
+let headers = [];      // column names exactly as written in the file
+let records = [];      // [{cells: [...], idx: original position, hay: lowercase text for searching}]
+let filters = [];      // [{name, col, el, values: [distinct strings]}]
+let sortCol = -1;      // -1 = original file order
+let sortDir = 1;       // 1 ascending, -1 descending
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/* ================================================================
+   3. LOADING A FILE
+   ================================================================ */
+
+function showError(msg) {
+  const box = $("error");
+  box.replaceChildren();
+  const s = document.createElement("strong");
+  s.textContent = "This file could not be used. ";
+  box.append(s, msg);        // textContent-style insertion: never interpreted as HTML
+  box.hidden = false;
+  $("warn").hidden = true;
+  $("viewer").hidden = true;
+}
+
+$("file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  $("error").hidden = true; $("warn").hidden = true;
+  if (!file) return;
+  try {
+    let text = await file.text();                    // decoded as UTF-8, locally
+    text = text.replace(/^\uFEFF/, "");              // drop a byte-order mark if present
+    if (text.trim() === "") throw new Error("The file is empty.");
+    const rows = parseDelimited(text, detectDelimiter(text));
+    headers = rows[0].cells.map((h) => h.trim());
+    const data = rows.slice(1);
+    if (data.length === 0) throw new Error("The file has a header line but no data rows.");
+    for (const r of data) {
+      if (r.cells.length !== headers.length) throw new Error("Line " + r.line + " has " + r.cells.length +
+        " values, but the header has " + headers.length + " columns. The file may be damaged or use a different separator.");
+    }
+    const known = headers.filter((h) => EXPECTED.includes(h));
+    if (known.length === 0) throw new Error("None of the expected columns were found (for example record_id, title_raw, " +
+      "country_raw). Columns found: " + headers.map((h) => '"' + h + '"').join(", ") +
+      ". Check that you chose the right file.");
+
+    records = data.map((r, i) => ({ cells: r.cells, idx: i, hay: r.cells.join("\n").toLowerCase() }));
+    sortCol = -1; sortDir = 1;
+    setupViewer(text.includes("\uFFFD"));
+  } catch (err) {
+    showError(err.message || "Unknown problem while reading the file.");
+  }
+});
+
+// Build the table header, dropdown filters and sort menu for the loaded file.
+function setupViewer(hasBadCharacters) {
+  const notes = [];
+  const missing = EXPECTED.filter((c) => !headers.includes(c));
+  if (missing.length) notes.push("Expected columns not found: " + missing.join(", ") + ".");
+  const extra = headers.filter((h) => !EXPECTED.includes(h));
+  if (extra.length) notes.push("Columns not in the expected list are shown too: " + extra.join(", ") + ".");
+  if (hasBadCharacters) notes.push("Some characters could not be decoded, so the file may not be UTF-8 and some text may look wrong.");
+
+  // Dropdown filters (built only for columns that exist). Options are the exact values in the file.
+  $("filters").replaceChildren();
+  filters = FILTER_COLUMNS.map((name) => {
+    const col = headers.indexOf(name);
+    const wrap = document.createElement("div");
+    const label = document.createElement("label");
+    label.textContent = name; label.htmlFor = "filter-" + name;
+    const el = document.createElement("select");
+    el.id = "filter-" + name;
+    wrap.append(label, el); $("filters").appendChild(wrap);
+    const f = { name, col, el, values: [] };
+    if (col < 0) {
+      el.disabled = true;
+      el.append(new Option("Column not in this file", "-1"));
+      notes.push('The filter for "' + name + '" is disabled because that column is not in the file.');
+    } else {
+      const tally = new Map();
+      records.forEach((r) => tally.set(r.cells[col], (tally.get(r.cells[col]) || 0) + 1));
+      f.values = [...tally.keys()].sort((a, b) => collator.compare(a, b));
+      el.append(new Option("All (" + records.length + ")", "-1"));
+      f.values.forEach((v, i) => el.append(new Option((v === "" ? "(empty)" : v) + " (" + tally.get(v) + ")", String(i))));
+      el.addEventListener("change", apply);
+    }
+    return f;
+  });
+
+  // Sort menu.
+  const sel = $("sortBy");
+  sel.replaceChildren(new Option("Original file order", "-1"));
+  headers.forEach((h, i) => sel.append(new Option(h, String(i))));
+  sel.value = "-1"; $("sortDir").textContent = "Ascending";
+
+  // Table header: each column title is a button that sorts.
+  const thead = document.createElement("thead");
+  const tr = thead.insertRow();
+  headers.forEach((h, i) => {
+    const th = document.createElement("th"); th.scope = "col";
+    const b = document.createElement("button"); b.type = "button";
+    b.append(h); const arrow = document.createElement("span"); arrow.className = "arrow"; arrow.setAttribute("aria-hidden", "true");
+    b.appendChild(arrow);
+    b.addEventListener("click", () => { sortCol === i ? (sortDir = -sortDir) : (sortCol = i, sortDir = 1); apply(); });
+    th.appendChild(b); tr.appendChild(th);
+  });
+  $("table").replaceChildren(thead, document.createElement("tbody"));
+
+  $("search").value = "";
+  if (notes.length) { $("warn").textContent = notes.join(" "); $("warn").hidden = false; }
+  $("viewer").hidden = false;
+  apply();
+}
+
+/* ================================================================
+   4. FILTER, SORT AND DRAW
+   ================================================================ */
+
+function apply() {
+  // Search: lowercase is used ONLY for matching; displayed text is never changed.
+  const terms = $("search").value.toLowerCase().split(/\s+/).filter(Boolean);
+  const active = filters.filter((f) => f.col >= 0 && f.el.value !== "-1")
+                        .map((f) => ({ col: f.col, value: f.values[Number(f.el.value)] }));
+  let visible = records.filter((r) =>
+    terms.every((t) => r.hay.includes(t)) && active.every((a) => r.cells[a.col] === a.value));
+
+  if (sortCol >= 0) {
+    visible = visible.slice().sort((a, b) => {
+      const x = a.cells[sortCol], y = b.cells[sortCol];
+      if (x === "" && y === "") return a.idx - b.idx;
+      if (x === "") return 1;                       // blanks always last
+      if (y === "") return -1;
+      return collator.compare(x, y) * sortDir || a.idx - b.idx;
+    });
+  }
+
+  // Keep sort controls and header arrows in step with the current sort.
+  $("sortBy").value = String(sortCol);
+  $("sortDir").textContent = sortDir === 1 ? "Ascending" : "Descending";
+  [...$("table").tHead.rows[0].cells].forEach((th, i) => {
+    if (i === sortCol) th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+    else th.removeAttribute("aria-sort");
+    th.querySelector(".arrow").textContent = i === sortCol ? (sortDir === 1 ? "▲" : "▼") : "";
+  });
+
+  $("count").textContent = "Showing " + visible.length + " of " + records.length + " records.";
+
+  const body = document.createElement("tbody");
+  visible.slice(0, MAX_ROWS_SHOWN).forEach((r) => {
+    const tr = body.insertRow();
+    r.cells.forEach((value, i) => {
+      const cell = document.createElement(i === 0 ? "th" : "td");
+      if (i === 0) cell.scope = "row";
+      cell.setAttribute("data-label", headers[i]);   // used for the narrow-screen card layout
+      cell.textContent = value;                      // text only: HTML or scripts in a cell are not executed
+      tr.appendChild(cell);
+    });
+  });
+  $("table").replaceChild(body, $("table").tBodies[0]);
+  $("more").textContent = visible.length > MAX_ROWS_SHOWN
+    ? "Only the first " + MAX_ROWS_SHOWN + " matching records are drawn. Narrow the search to see the rest."
+    : (visible.length === 0 ? "No records match the current search and filters." : "");
+}
+
+$("search").addEventListener("input", apply);
+$("sortBy").addEventListener("change", () => { sortCol = Number($("sortBy").value); sortDir = 1; apply(); });
+$("sortDir").addEventListener("click", () => { sortDir = -sortDir; apply(); });
+$("reset").addEventListener("click", () => {
+  $("search").value = ""; filters.forEach((f) => { if (f.col >= 0) f.el.value = "-1"; });
+  sortCol = -1; sortDir = 1; apply(); $("search").focus();
+});
+</script>
+</body>
+</html>
